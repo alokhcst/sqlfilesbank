@@ -122,12 +122,6 @@ sqlfilesbank/
 │   ├── .gitignore                # Git ignore rules
 │   └── .env                       # Environment variables (create this)
 │
-├── 📖 Reference Framework
-│   └── example_framework/         # Reference LangGraph implementation
-│       ├── app.py
-│       ├── sidekick.py
-│       └── sidekick_tools.py
-│
 └── 🐍 Virtual Environment
     └── venv/                      # Python virtual environment (gitignored)
 ```
