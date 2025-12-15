@@ -121,7 +121,7 @@ with gr.Blocks(title="SQL Processor") as ui:
     gr.Markdown("## SQL Processor - Banking Data Warehouse")
     gr.Markdown("""
     This tool processes SQL files for banking data warehouses:
-    - Reads SQL files from absolute paths
+    - Reads SQL files from relative or absolute paths
     - Applies banking nomenclature conventions
     - Generates separate DDL and DML files
     - Adds banking controls and audit comments
@@ -136,7 +136,7 @@ with gr.Blocks(title="SQL Processor") as ui:
         with gr.Row():
             message = gr.Textbox(
                 show_label=False, 
-                placeholder="Enter your request. Example: Process SQL file at C:\\Users\\alokh\\projects\\sqlfilesbank\\sqlfiles\\wealthmgmt_sql_ddl.txt using nomenclature at C:\\Users\\alokh\\projects\\sqlfilesbank\\bankingnomenclature\\naming_conventions.txt"
+                placeholder="Enter your request. Example: Process SQL file at sqlfiles/wealthmgmt_sql_ddl.txt using nomenclature at bankingnomenclature/naming_conventions.txt"
             )
         with gr.Row():
             success_criteria = gr.Textbox(

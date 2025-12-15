@@ -10,10 +10,10 @@ from langchain_community.agent_toolkits import FileManagementToolkit
 
 def read_sql_file(sql_file_path: str) -> str:
     """
-    Read SQL file from absolute path.
+    Read SQL file from relative or absolute path.
     
     Args:
-        sql_file_path: Absolute path to the SQL file
+        sql_file_path: Relative or absolute path to the SQL file
         
     Returns:
         Content of the SQL file as string
@@ -31,10 +31,10 @@ def read_sql_file(sql_file_path: str) -> str:
 
 def read_banking_nomenclature(nomenclature_path: str) -> str:
     """
-    Read banking nomenclature file from absolute path.
+    Read banking nomenclature file from relative or absolute path.
     
     Args:
-        nomenclature_path: Absolute path to the banking nomenclature file
+        nomenclature_path: Relative or absolute path to the banking nomenclature file
         
     Returns:
         Content of the nomenclature file as string
@@ -55,7 +55,7 @@ def get_sql_file_content(sql_file_path: str) -> str:
     Get the actual content of SQL file for processing.
     
     Args:
-        sql_file_path: Absolute path to the SQL file
+        sql_file_path: Relative or absolute path to the SQL file
         
     Returns:
         Content of the SQL file
@@ -75,7 +75,7 @@ def get_nomenclature_content(nomenclature_path: str) -> str:
     Get the actual content of nomenclature file for processing.
     
     Args:
-        nomenclature_path: Absolute path to the nomenclature file
+        nomenclature_path: Relative or absolute path to the nomenclature file
         
     Returns:
         Content of the nomenclature file
@@ -519,8 +519,8 @@ def _process_sql_file_impl(
     Complete process: Read SQL file, apply nomenclature, generate DDL and DML files.
     
     Args:
-        sql_file_path: Absolute path to SQL file
-        nomenclature_path: Absolute path to banking nomenclature file
+        sql_file_path: Relative or absolute path to SQL file
+        nomenclature_path: Relative or absolute path to banking nomenclature file
         output_dir: Optional output directory for generated files
         
     Returns:
@@ -565,12 +565,12 @@ class ProcessSQLFileInput(BaseModel):
     process_sql_file StructuredTool, ensuring type safety and validation.
     
     Attributes:
-        sql_file_path: Absolute path to the SQL file to process (required)
-        nomenclature_path: Absolute path to the banking nomenclature file (required)
+        sql_file_path: Relative or absolute path to the SQL file to process (required)
+        nomenclature_path: Relative or absolute path to the banking nomenclature file (required)
         output_dir: Optional output directory for generated DDL and DML files
     """
-    sql_file_path: str = Field(description="Absolute path to the SQL file to process")
-    nomenclature_path: str = Field(description="Absolute path to the banking nomenclature file")
+    sql_file_path: str = Field(description="Relative or absolute path to the SQL file to process")
+    nomenclature_path: str = Field(description="Relative or absolute path to the banking nomenclature file")
     output_dir: Optional[str] = Field(default=None, description="Optional output directory for generated DDL and DML files")
 
 
@@ -583,8 +583,8 @@ def process_sql_file(
     Complete process: Read SQL file, apply nomenclature, generate DDL and DML files.
     
     Args:
-        sql_file_path: Absolute path to SQL file
-        nomenclature_path: Absolute path to banking nomenclature file
+        sql_file_path: Relative or absolute path to SQL file
+        nomenclature_path: Relative or absolute path to banking nomenclature file
         output_dir: Optional output directory for generated files
         
     Returns:
@@ -618,12 +618,12 @@ async def sql_processor_tools():
         Tool(
             name="read_sql_file",
             func=read_sql_file,
-            description="Read a SQL file from an absolute path. Use this to check if a SQL file exists and can be read."
+            description="Read a SQL file from a relative or absolute path. Use this to check if a SQL file exists and can be read."
         ),
         Tool(
             name="read_banking_nomenclature",
             func=read_banking_nomenclature,
-            description="Read banking nomenclature file from an absolute path. Use this to load naming conventions."
+            description="Read banking nomenclature file from a relative or absolute path. Use this to load naming conventions."
         ),
         StructuredTool.from_function(
             func=process_sql_file,

@@ -180,8 +180,8 @@ This will launch the Gradio web interface at `http://127.0.0.1:7860`
 
 2. **Enter your request** in the message box:
    ```
-   Process SQL file at C:\Users\alokh\projects\sqlfilesbank\sqlfiles\wealthmgmt_sql_ddl.txt 
-   using nomenclature at C:\Users\alokh\projects\sqlfilesbank\bankingnomenclature\naming_conventions.txt
+   Process SQL file at sqlfiles/wealthmgmt_sql_ddl.txt 
+   using nomenclature at bankingnomenclature/naming_conventions.txt
    ```
 
 3. **Optional**: Specify custom success criteria

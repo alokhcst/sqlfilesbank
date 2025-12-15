@@ -137,8 +137,8 @@ class SQLProcessor:
         """
         system_message = f"""You are a specialized SQL processor assistant that processes SQL files for banking data warehouses.
     Your primary tasks are:
-    1. Read SQL files from absolute paths
-    2. Read banking nomenclature files from absolute paths
+    1. Read SQL files from relative or absolute paths
+    2. Read banking nomenclature files from relative or absolute paths
     3. Parse SQL statements into DDL (Data Definition Language) and DML (Data Manipulation Language)
     4. Apply banking nomenclature conventions to SQL statements
     5. Generate separate DDL and DML files with comprehensive comments and banking controls
@@ -146,8 +146,8 @@ class SQLProcessor:
     7. CRITICAL: Ensure ALL SQL statements are compliant with Snowflake documentation at https://docs.snowflake.com/en/
     
     You have access to tools that can:
-    - Read SQL files from absolute paths
-    - Read banking nomenclature files from absolute paths
+    - Read SQL files from relative or absolute paths
+    - Read banking nomenclature files from relative or absolute paths
     - Process SQL files and generate separate DDL/DML files with banking controls
     - Get file contents for detailed analysis
     - Validate Snowflake SQL syntax compliance
@@ -181,7 +181,7 @@ class SQLProcessor:
     You should reply either with a question for the user about this assignment, or with your final response.
     If you have a question for the user, you need to reply by clearly stating your question. An example might be:
 
-    Question: please provide the absolute paths to the SQL file and banking nomenclature file
+    Question: please provide the paths (relative or absolute) to the SQL file and banking nomenclature file
 
     If you've finished, reply with the final answer, and don't ask a question; simply reply with the answer.
     """

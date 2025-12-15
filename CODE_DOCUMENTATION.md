@@ -132,14 +132,14 @@ Cleanup resources when processor is no longer needed. Placeholder for future res
 ### Functions
 
 #### `read_sql_file(sql_file_path: str) -> str`
-Read SQL file from absolute path. Checks if file exists and returns status message with content length.
+Read SQL file from relative or absolute path. Checks if file exists and returns status message with content length.
 
 **Returns**: Success message with file path and content length, or error message
 
 ---
 
 #### `read_banking_nomenclature(nomenclature_path: str) -> str`
-Read banking nomenclature file from absolute path. Checks if file exists and returns status message.
+Read banking nomenclature file from relative or absolute path. Checks if file exists and returns status message.
 
 **Returns**: Success message with file path and content length, or error message
 
@@ -262,8 +262,8 @@ Pydantic schema for process_sql_file tool input validation.
 **Purpose**: Defines required and optional parameters for the process_sql_file StructuredTool, ensuring type safety and validation.
 
 **Attributes**:
-- `sql_file_path`: Absolute path to the SQL file to process (required)
-- `nomenclature_path`: Absolute path to the banking nomenclature file (required)
+- `sql_file_path`: Relative or absolute path to the SQL file to process (required)
+- `nomenclature_path`: Relative or absolute path to the banking nomenclature file (required)
 - `output_dir`: Optional output directory for generated DDL and DML files
 
 ---

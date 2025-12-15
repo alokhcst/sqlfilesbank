@@ -4,7 +4,7 @@ A LangGraph-based tool that processes SQL files for banking data warehouses, app
 
 ## Features
 
-- **Reads SQL files** from absolute paths
+- **Reads SQL files** from relative or absolute paths
 - **Applies banking nomenclature** from reference files
 - **Separates SQL statements** into DDL (Data Definition Language) and DML (Data Manipulation Language)
 - **Generates separate files** for DDL and DML with banking controls
@@ -50,7 +50,7 @@ This will launch a Gradio web interface in your browser.
 
 1. **Enter your request** in the message box:
    ```
-   Process SQL file at C:\Users\alokh\projects\sqlfilesbank\sqlfiles\wealthmgmt_sql_ddl.txt using nomenclature at C:\Users\alokh\projects\sqlfilesbank\bankingnomenclature\naming_conventions.txt
+   Process SQL file at sqlfiles/wealthmgmt_sql_ddl.txt using nomenclature at bankingnomenclature/naming_conventions.txt
    ```
 
 2. **Optional**: Specify success criteria if you have specific requirements
@@ -98,8 +98,8 @@ The generated files include banking-specific controls:
 ## Example
 
 ### Input
-SQL file at: `C:\Users\alokh\projects\sqlfilesbank\sqlfiles\wealthmgmt_sql_ddl.txt`
-Nomenclature at: `C:\Users\alokh\projects\sqlfilesbank\bankingnomenclature\naming_conventions.txt`
+SQL file at: `sqlfiles/wealthmgmt_sql_ddl.txt`
+Nomenclature at: `bankingnomenclature/naming_conventions.txt`
 
 ### Output
 - `wealthmgmt_sql_ddl_DDL.sql` - All DDL statements with banking controls
@@ -113,10 +113,6 @@ sqlfilesbank/
 │   └── wealthmgmt_sql_ddl.txt
 ├── bankingnomenclature/         # Banking nomenclature reference
 │   └── naming_conventions.txt
-├── example_framework/           # Reference LangGraph framework
-│   ├── app.py
-│   ├── sidekick.py
-│   └── sidekick_tools.py
 ├── sql_processor.py            # Main LangGraph application
 ├── sql_processor_tools.py      # SQL processing tools
 └── sql_processor_app.py        # Gradio interface
@@ -142,7 +138,7 @@ The tool applies banking nomenclature conventions including:
 
 - Python 3.8+
 - OpenAI API key
-- Access to SQL files and nomenclature files at absolute paths
+- Access to SQL files and nomenclature files (relative or absolute paths)
 
 ## Notes
 
