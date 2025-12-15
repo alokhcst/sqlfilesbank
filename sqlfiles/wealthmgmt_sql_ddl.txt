@@ -1,0 +1,1797 @@
+-- ==========================================
+-- SNOWFLAKE WEALTH MANAGEMENT DATABASE
+-- Complete DDL Scripts - Snowflake Compatible (No CHECK Constraints)
+-- ==========================================
+
+-- ==========================================
+-- STEP 1: DATABASE AND SCHEMA SETUP
+-- ==========================================
+
+-- Create Database
+CREATE DATABASE IF NOT EXISTS WEALTH_MANAGEMENT
+    COMMENT = 'Enterprise Wealth Management System Database';
+
+-- Use the database
+USE DATABASE WEALTH_MANAGEMENT;
+
+-- Create Schemas
+CREATE SCHEMA IF NOT EXISTS CORE
+    COMMENT = 'Core business entities - clients, advisors, portfolios';
+
+CREATE SCHEMA IF NOT EXISTS TRANSACTIONS
+    COMMENT = 'Transactional data - trades, holdings, cash flows';
+
+CREATE SCHEMA IF NOT EXISTS ANALYTICS
+    COMMENT = 'Analytics views and materialized tables';
+
+CREATE SCHEMA IF NOT EXISTS COMPLIANCE
+    COMMENT = 'Compliance and regulatory data';
+
+CREATE SCHEMA IF NOT EXISTS REPORTING
+    COMMENT = 'Reporting views and aggregated data';
+
+CREATE SCHEMA IF NOT EXISTS VALIDATION
+    COMMENT = 'Data validation rules and constraint checks';
+
+-- ==========================================
+-- STEP 2: CORE SCHEMA TABLES
+-- ==========================================
+
+USE SCHEMA CORE;
+
+-- ADVISOR Table
+CREATE OR REPLACE TABLE ADVISOR (
+    advisor_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    phone VARCHAR(20),
+    employee_id VARCHAR(50) UNIQUE,
+    department VARCHAR(100),
+    license_number VARCHAR(100),
+    hire_date DATE,
+    commission_rate DECIMAL(5,2) DEFAULT 0.00,
+    specialization VARCHAR(200),
+    active_status BOOLEAN DEFAULT TRUE,
+    manager_id INTEGER,
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_advisor_manager FOREIGN KEY (manager_id) REFERENCES ADVISOR(advisor_id)
+) COMMENT = 'Wealth management advisors and their hierarchical structure. Commission_rate should be between 0 and 100.';
+
+-- CLIENT Table
+CREATE OR REPLACE TABLE CLIENT (
+    client_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    address VARCHAR(500),
+    city VARCHAR(100),
+    state VARCHAR(50),
+    zip_code VARCHAR(20),
+    country VARCHAR(100) DEFAULT 'USA',
+    date_of_birth DATE,
+    ssn VARCHAR(11),  -- Encrypted in production
+    employment_status VARCHAR(50),
+    annual_income DECIMAL(18,2),
+    net_worth DECIMAL(18,2),
+    risk_tolerance VARCHAR(50), -- Valid values: Conservative, Moderate, Aggressive
+    client_since DATE DEFAULT CURRENT_DATE(),
+    kyc_status VARCHAR(50) DEFAULT 'Pending', -- Valid values: Pending, Current, Expired, Under Review
+    kyc_completion_date DATE,
+    active_status BOOLEAN DEFAULT TRUE,
+    advisor_id INTEGER NOT NULL,
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_client_advisor FOREIGN KEY (advisor_id) REFERENCES ADVISOR(advisor_id)
+) COMMENT = 'Client master data including demographics and financial profile';
+
+-- PORTFOLIO Table
+CREATE OR REPLACE TABLE PORTFOLIO (
+    portfolio_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    client_id INTEGER NOT NULL,
+    portfolio_name VARCHAR(200) NOT NULL,
+    portfolio_type VARCHAR(100),
+    total_value DECIMAL(18,2) DEFAULT 0.00,
+    cash_balance DECIMAL(18,2) DEFAULT 0.00,
+    investment_objective VARCHAR(200),
+    time_horizon VARCHAR(100),
+    inception_date DATE DEFAULT CURRENT_DATE(),
+    last_rebalance_date DATE,
+    next_rebalance_date DATE,
+    benchmark VARCHAR(100),
+    active_status BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_portfolio_client FOREIGN KEY (client_id) REFERENCES CLIENT(client_id)
+) COMMENT = 'Investment portfolios with strategy and objectives. Values should be >= 0.';
+
+-- ACCOUNT Table
+CREATE OR REPLACE TABLE ACCOUNT (
+    account_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    client_id INTEGER NOT NULL,
+    portfolio_id INTEGER NOT NULL,
+    account_number VARCHAR(50) UNIQUE NOT NULL,
+    account_type VARCHAR(100) NOT NULL,
+    account_name VARCHAR(200),
+    account_value DECIMAL(18,2) DEFAULT 0.00,
+    available_cash DECIMAL(18,2) DEFAULT 0.00,
+    custodian VARCHAR(200),
+    tax_status VARCHAR(100),
+    opening_date DATE DEFAULT CURRENT_DATE(),
+    active_status BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_account_client FOREIGN KEY (client_id) REFERENCES CLIENT(client_id),
+    CONSTRAINT fk_account_portfolio FOREIGN KEY (portfolio_id) REFERENCES PORTFOLIO(portfolio_id)
+) COMMENT = 'Individual investment accounts under portfolios. Values should be >= 0.';
+
+-- SECURITY Table
+CREATE OR REPLACE TABLE SECURITY (
+    security_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    symbol VARCHAR(20) NOT NULL UNIQUE,
+    security_name VARCHAR(500) NOT NULL,
+    security_type VARCHAR(100) NOT NULL,
+    sector VARCHAR(100),
+    industry VARCHAR(200),
+    exchange VARCHAR(100),
+    currency VARCHAR(10) DEFAULT 'USD',
+    current_price DECIMAL(18,4),
+    price_date DATE,
+    rating VARCHAR(50),
+    dividend_yield DECIMAL(8,4),
+    beta DECIMAL(8,4),
+    market_cap DECIMAL(18,2),
+    active_status BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+) COMMENT = 'Security master data for all tradeable instruments. Price should be >= 0.';
+
+-- BENCHMARK Table
+CREATE OR REPLACE TABLE BENCHMARK (
+    benchmark_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    benchmark_name VARCHAR(200) NOT NULL,
+    benchmark_symbol VARCHAR(20) UNIQUE NOT NULL,
+    benchmark_type VARCHAR(100),
+    description VARCHAR(1000),
+    current_value DECIMAL(18,4),
+    value_date DATE,
+    active_status BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+) COMMENT = 'Market benchmarks for performance comparison';
+
+-- GOAL Table
+CREATE OR REPLACE TABLE GOAL (
+    goal_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    client_id INTEGER NOT NULL,
+    goal_name VARCHAR(200) NOT NULL,
+    goal_type VARCHAR(100),
+    target_amount DECIMAL(18,2),
+    current_amount DECIMAL(18,2) DEFAULT 0.00,
+    target_date DATE,
+    priority_level VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'Active', -- Valid values: Active, Achieved, On Hold, Cancelled
+    monthly_contribution DECIMAL(18,2),
+    description VARCHAR(2000),
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_goal_client FOREIGN KEY (client_id) REFERENCES CLIENT(client_id)
+) COMMENT = 'Client financial goals and progress tracking';
+
+-- RISK_ASSESSMENT Table
+CREATE OR REPLACE TABLE RISK_ASSESSMENT (
+    assessment_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    client_id INTEGER NOT NULL,
+    assessment_date DATE NOT NULL,
+    questionnaire_version VARCHAR(50),
+    risk_score INTEGER,
+    risk_category VARCHAR(50),
+    investment_horizon VARCHAR(100),
+    risk_capacity DECIMAL(18,2),
+    liquidity_needs VARCHAR(500),
+    additional_notes VARCHAR(5000),
+    next_review_date DATE,
+    current_assessment BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_risk_client FOREIGN KEY (client_id) REFERENCES CLIENT(client_id)
+) COMMENT = 'Client risk tolerance assessments and profiles. Risk_score should be 0-100.';
+
+-- REVIEW_MEETING Table
+CREATE OR REPLACE TABLE REVIEW_MEETING (
+    meeting_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    client_id INTEGER NOT NULL,
+    advisor_id INTEGER NOT NULL,
+    meeting_date TIMESTAMP_NTZ NOT NULL,
+    meeting_type VARCHAR(100),
+    meeting_format VARCHAR(50),
+    agenda VARCHAR(2000),
+    meeting_notes VARCHAR(10000),
+    action_items VARCHAR(5000),
+    next_meeting_date DATE,
+    meeting_status VARCHAR(50) DEFAULT 'Scheduled', -- Valid values: Scheduled, Completed, Cancelled, Rescheduled
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_meeting_client FOREIGN KEY (client_id) REFERENCES CLIENT(client_id),
+    CONSTRAINT fk_meeting_advisor FOREIGN KEY (advisor_id) REFERENCES ADVISOR(advisor_id)
+) COMMENT = 'Client review meetings and interaction history';
+
+-- ==========================================
+-- STEP 3: TRANSACTIONS SCHEMA TABLES
+-- ==========================================
+
+USE SCHEMA TRANSACTIONS;
+
+-- HOLDING Table
+CREATE OR REPLACE TABLE HOLDING (
+    holding_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    account_id INTEGER NOT NULL,
+    security_id INTEGER NOT NULL,
+    quantity DECIMAL(18,6) NOT NULL,
+    average_cost DECIMAL(18,4),
+    current_value DECIMAL(18,2),
+    unrealized_gain_loss DECIMAL(18,2),
+    weight_percentage DECIMAL(8,4),
+    purchase_date DATE,
+    last_updated TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_holding_account FOREIGN KEY (account_id) REFERENCES CORE.ACCOUNT(account_id),
+    CONSTRAINT fk_holding_security FOREIGN KEY (security_id) REFERENCES CORE.SECURITY(security_id)
+) COMMENT = 'Current security holdings in accounts. Quantity should be >= 0.';
+
+-- TRANSACTION Table
+CREATE OR REPLACE TABLE TRANSACTION (
+    transaction_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    account_id INTEGER NOT NULL,
+    security_id INTEGER,
+    transaction_type VARCHAR(50) NOT NULL, -- Valid: Buy, Sell, Deposit, Withdrawal, Dividend, Interest, Fee, Transfer In, Transfer Out
+    quantity DECIMAL(18,6),
+    price DECIMAL(18,4),
+    amount DECIMAL(18,2) NOT NULL,
+    fees DECIMAL(18,2) DEFAULT 0.00,
+    tax_amount DECIMAL(18,2) DEFAULT 0.00,
+    trade_date DATE NOT NULL,
+    settlement_date DATE,
+    order_type VARCHAR(50),
+    execution_venue VARCHAR(200),
+    reference_number VARCHAR(100) UNIQUE,
+    description VARCHAR(1000),
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_transaction_account FOREIGN KEY (account_id) REFERENCES CORE.ACCOUNT(account_id),
+    CONSTRAINT fk_transaction_security FOREIGN KEY (security_id) REFERENCES CORE.SECURITY(security_id)
+) COMMENT = 'All financial transactions and trades';
+
+-- PERFORMANCE Table
+CREATE OR REPLACE TABLE PERFORMANCE (
+    performance_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    portfolio_id INTEGER NOT NULL,
+    performance_date DATE NOT NULL,
+    portfolio_value DECIMAL(18,2),
+    daily_return DECIMAL(10,4),
+    mtd_return DECIMAL(10,4),
+    qtd_return DECIMAL(10,4),
+    ytd_return DECIMAL(10,4),
+    one_year_return DECIMAL(10,4),
+    three_year_return DECIMAL(10,4),
+    five_year_return DECIMAL(10,4),
+    benchmark_return DECIMAL(10,4),
+    alpha DECIMAL(10,4),
+    beta DECIMAL(10,4),
+    sharpe_ratio DECIMAL(10,4),
+    volatility DECIMAL(10,4),
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_performance_portfolio FOREIGN KEY (portfolio_id) REFERENCES CORE.PORTFOLIO(portfolio_id),
+    CONSTRAINT uk_performance_portfolio_date UNIQUE (portfolio_id, performance_date)
+) COMMENT = 'Historical portfolio performance metrics';
+
+-- ASSET_ALLOCATION Table
+CREATE OR REPLACE TABLE ASSET_ALLOCATION (
+    allocation_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    portfolio_id INTEGER NOT NULL,
+    asset_class VARCHAR(100) NOT NULL,
+    target_percentage DECIMAL(8,4),
+    current_percentage DECIMAL(8,4),
+    target_amount DECIMAL(18,2),
+    current_amount DECIMAL(18,2),
+    variance DECIMAL(8,4),
+    last_rebalance DATE,
+    active_status BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_allocation_portfolio FOREIGN KEY (portfolio_id) REFERENCES CORE.PORTFOLIO(portfolio_id),
+    CONSTRAINT uk_allocation_portfolio_class UNIQUE (portfolio_id, asset_class)
+) COMMENT = 'Target and current asset allocation by portfolio';
+
+-- FEE_SCHEDULE Table
+CREATE OR REPLACE TABLE FEE_SCHEDULE (
+    fee_schedule_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    client_id INTEGER NOT NULL,
+    fee_type VARCHAR(100) NOT NULL,
+    fee_rate DECIMAL(8,4),
+    minimum_fee DECIMAL(18,2),
+    maximum_fee DECIMAL(18,2),
+    calculation_method VARCHAR(200),
+    billing_frequency VARCHAR(50),
+    effective_date DATE NOT NULL,
+    end_date DATE,
+    active_status BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_feeschedule_client FOREIGN KEY (client_id) REFERENCES CORE.CLIENT(client_id)
+) COMMENT = 'Client fee structures and billing schedules. Fee_rate should be >= 0.';
+
+-- BILLING Table
+CREATE OR REPLACE TABLE BILLING (
+    billing_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    client_id INTEGER NOT NULL,
+    fee_schedule_id INTEGER NOT NULL,
+    billing_period_start DATE NOT NULL,
+    billing_period_end DATE NOT NULL,
+    portfolio_value DECIMAL(18,2),
+    fee_amount DECIMAL(18,2) NOT NULL,
+    tax_amount DECIMAL(18,2) DEFAULT 0.00,
+    total_amount DECIMAL(18,2) NOT NULL,
+    billing_status VARCHAR(50) DEFAULT 'Pending', -- Valid: Pending, Invoiced, Paid, Outstanding, Overdue, Cancelled
+    invoice_date DATE,
+    due_date DATE,
+    payment_date DATE,
+    payment_method VARCHAR(100),
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_billing_client FOREIGN KEY (client_id) REFERENCES CORE.CLIENT(client_id),
+    CONSTRAINT fk_billing_feeschedule FOREIGN KEY (fee_schedule_id) REFERENCES FEE_SCHEDULE(fee_schedule_id)
+) COMMENT = 'Client billing and invoice records';
+
+-- ==========================================
+-- STEP 4: COMPLIANCE SCHEMA TABLES
+-- ==========================================
+
+USE SCHEMA COMPLIANCE;
+
+-- COMPLIANCE_CHECK Table
+CREATE OR REPLACE TABLE COMPLIANCE_CHECK (
+    compliance_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    client_id INTEGER NOT NULL,
+    account_id INTEGER,
+    check_type VARCHAR(100) NOT NULL,
+    check_description VARCHAR(1000),
+    compliance_rule VARCHAR(500),
+    status VARCHAR(50) DEFAULT 'Open', -- Valid: Open, Under Review, Resolved, Escalated
+    check_date DATE NOT NULL,
+    findings VARCHAR(5000),
+    recommendations VARCHAR(5000),
+    severity_level VARCHAR(50), -- Valid: Low, Medium, High, Critical
+    resolution_date DATE,
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_compliance_client FOREIGN KEY (client_id) REFERENCES CORE.CLIENT(client_id),
+    CONSTRAINT fk_compliance_account FOREIGN KEY (account_id) REFERENCES CORE.ACCOUNT(account_id)
+) COMMENT = 'Compliance monitoring and violation tracking';
+
+-- DOCUMENT Table
+CREATE OR REPLACE TABLE DOCUMENT (
+    document_id INTEGER AUTOINCREMENT PRIMARY KEY,
+    client_id INTEGER NOT NULL,
+    document_type VARCHAR(100) NOT NULL,
+    document_name VARCHAR(500) NOT NULL,
+    file_path VARCHAR(1000),
+    file_format VARCHAR(50),
+    file_size DECIMAL(18,2),
+    upload_date DATE DEFAULT CURRENT_DATE(),
+    expiry_date DATE,
+    access_level VARCHAR(50) DEFAULT 'Private',
+    is_signed BOOLEAN DEFAULT FALSE,
+    uploaded_by VARCHAR(200),
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    CONSTRAINT fk_document_client FOREIGN KEY (client_id) REFERENCES CORE.CLIENT(client_id)
+) COMMENT = 'Client document management and storage';
+
+-- ==========================================
+-- STEP 5: VALIDATION SCHEMA - CONSTRAINT CHECKS
+-- ==========================================
+
+USE SCHEMA VALIDATION;
+
+-- Validation View: Invalid Risk Tolerance Values
+CREATE OR REPLACE VIEW VW_INVALID_RISK_TOLERANCE AS
+SELECT 
+    client_id,
+    first_name || ' ' || last_name AS client_name,
+    risk_tolerance,
+    'Risk tolerance must be: Conservative, Moderate, or Aggressive' AS validation_error
+FROM CORE.CLIENT
+WHERE risk_tolerance NOT IN ('Conservative', 'Moderate', 'Aggressive')
+AND risk_tolerance IS NOT NULL;
+
+-- Validation View: Invalid KYC Status Values
+CREATE OR REPLACE VIEW VW_INVALID_KYC_STATUS AS
+SELECT 
+    client_id,
+    first_name || ' ' || last_name AS client_name,
+    kyc_status,
+    'KYC status must be: Pending, Current, Expired, or Under Review' AS validation_error
+FROM CORE.CLIENT
+WHERE kyc_status NOT IN ('Pending', 'Current', 'Expired', 'Under Review')
+AND kyc_status IS NOT NULL;
+
+-- Validation View: Invalid Commission Rates
+CREATE OR REPLACE VIEW VW_INVALID_COMMISSION_RATES AS
+SELECT 
+    advisor_id,
+    first_name || ' ' || last_name AS advisor_name,
+    commission_rate,
+    'Commission rate must be between 0 and 100' AS validation_error
+FROM CORE.ADVISOR
+WHERE commission_rate < 0 OR commission_rate > 100;
+
+-- Validation View: Negative Portfolio Values
+CREATE OR REPLACE VIEW VW_NEGATIVE_PORTFOLIO_VALUES AS
+SELECT 
+    portfolio_id,
+    portfolio_name,
+    total_value,
+    cash_balance,
+    'Portfolio values cannot be negative' AS validation_error
+FROM CORE.PORTFOLIO
+WHERE total_value < 0 OR cash_balance < 0;
+
+-- Validation View: Negative Account Values
+CREATE OR REPLACE VIEW VW_NEGATIVE_ACCOUNT_VALUES AS
+SELECT 
+    account_id,
+    account_number,
+    account_value,
+    available_cash,
+    'Account values cannot be negative' AS validation_error
+FROM CORE.ACCOUNT
+WHERE account_value < 0 OR available_cash < 0;
+
+-- Validation View: Invalid Transaction Types
+CREATE OR REPLACE VIEW VW_INVALID_TRANSACTION_TYPES AS
+SELECT 
+    transaction_id,
+    account_id,
+    transaction_type,
+    'Invalid transaction type' AS validation_error
+FROM TRANSACTIONS.TRANSACTION
+WHERE transaction_type NOT IN ('Buy', 'Sell', 'Deposit', 'Withdrawal', 'Dividend', 'Interest', 'Fee', 'Transfer In', 'Transfer Out');
+
+-- Validation View: Invalid Goal Status
+CREATE OR REPLACE VIEW VW_INVALID_GOAL_STATUS AS
+SELECT 
+    goal_id,
+    goal_name,
+    status,
+    'Goal status must be: Active, Achieved, On Hold, or Cancelled' AS validation_error
+FROM CORE.GOAL
+WHERE status NOT IN ('Active', 'Achieved', 'On Hold', 'Cancelled');
+
+-- Validation View: Invalid Risk Scores
+CREATE OR REPLACE VIEW VW_INVALID_RISK_SCORES AS
+SELECT 
+    assessment_id,
+    client_id,
+    risk_score,
+    'Risk score must be between 0 and 100' AS validation_error
+FROM CORE.RISK_ASSESSMENT
+WHERE risk_score < 0 OR risk_score > 100;
+
+-- Validation View: Invalid Meeting Status
+CREATE OR REPLACE VIEW VW_INVALID_MEETING_STATUS AS
+SELECT 
+    meeting_id,
+    client_id,
+    meeting_status,
+    'Meeting status must be: Scheduled, Completed, Cancelled, or Rescheduled' AS validation_error
+FROM CORE.REVIEW_MEETING
+WHERE meeting_status NOT IN ('Scheduled', 'Completed', 'Cancelled', 'Rescheduled');
+
+-- Validation View: Invalid Billing Status
+CREATE OR REPLACE VIEW VW_INVALID_BILLING_STATUS AS
+SELECT 
+    billing_id,
+    client_id,
+    billing_status,
+    'Billing status must be: Pending, Invoiced, Paid, Outstanding, Overdue, or Cancelled' AS validation_error
+FROM TRANSACTIONS.BILLING
+WHERE billing_status NOT IN ('Pending', 'Invoiced', 'Paid', 'Outstanding', 'Overdue', 'Cancelled');
+
+-- Validation View: Invalid Compliance Status
+CREATE OR REPLACE VIEW VW_INVALID_COMPLIANCE_STATUS AS
+SELECT 
+    compliance_id,
+    client_id,
+    status,
+    'Compliance status must be: Open, Under Review, Resolved, or Escalated' AS validation_error
+FROM COMPLIANCE.COMPLIANCE_CHECK
+WHERE status NOT IN ('Open', 'Under Review', 'Resolved', 'Escalated');
+
+-- Validation View: Invalid Severity Levels
+CREATE OR REPLACE VIEW VW_INVALID_SEVERITY_LEVELS AS
+SELECT 
+    compliance_id,
+    client_id,
+    severity_level,
+    'Severity level must be: Low, Medium, High, or Critical' AS validation_error
+FROM COMPLIANCE.COMPLIANCE_CHECK
+WHERE severity_level NOT IN ('Low', 'Medium', 'High', 'Critical')
+AND severity_level IS NOT NULL;
+
+-- Master Validation View - All Constraint Violations
+CREATE OR REPLACE VIEW VW_ALL_CONSTRAINT_VIOLATIONS AS
+SELECT 'Risk Tolerance' AS constraint_type, * FROM VW_INVALID_RISK_TOLERANCE
+UNION ALL
+SELECT 'KYC Status' AS constraint_type, client_id, client_name, kyc_status AS risk_tolerance, validation_error FROM VW_INVALID_KYC_STATUS
+UNION ALL
+SELECT 'Transaction Type' AS constraint_type, transaction_id::VARCHAR AS client_id, account_id::VARCHAR AS client_name, transaction_type AS risk_tolerance, validation_error FROM VW_INVALID_TRANSACTION_TYPES
+UNION ALL
+SELECT 'Goal Status' AS constraint_type, goal_id::VARCHAR AS client_id, goal_name AS client_name, status AS risk_tolerance, validation_error FROM VW_INVALID_GOAL_STATUS
+UNION ALL
+SELECT 'Meeting Status' AS constraint_type, meeting_id::VARCHAR AS client_id, client_id::VARCHAR AS client_name, meeting_status AS risk_tolerance, validation_error FROM VW_INVALID_MEETING_STATUS
+UNION ALL
+SELECT 'Billing Status' AS constraint_type, billing_id::VARCHAR AS client_id, client_id::VARCHAR AS client_name, billing_status AS risk_tolerance, validation_error FROM VW_INVALID_BILLING_STATUS
+UNION ALL
+SELECT 'Compliance Status' AS constraint_type, compliance_id::VARCHAR AS client_id, client_id::VARCHAR AS client_name, status AS risk_tolerance, validation_error FROM VW_INVALID_COMPLIANCE_STATUS
+UNION ALL
+SELECT 'Severity Level' AS constraint_type, compliance_id::VARCHAR AS client_id, client_id::VARCHAR AS client_name, severity_level AS risk_tolerance, validation_error FROM VW_INVALID_SEVERITY_LEVELS;
+
+
+/*
+
+Snowflake doesn't support traditional indexes like other databases. Snowflake uses automatic micro-partitioning and clustering instead. I'll update the script to remove the index creation and replace it with Snowflake
+
+
+-- ==========================================
+-- STEP 6: INDEXES FOR PERFORMANCE
+-- ==========================================
+
+USE SCHEMA CORE;
+
+-- CLIENT Indexes
+CREATE INDEX idx_client_advisor ON CLIENT(advisor_id);
+CREATE INDEX idx_client_email ON CLIENT(email);
+CREATE INDEX idx_client_status ON CLIENT(active_status);
+CREATE INDEX idx_client_since ON CLIENT(client_since);
+CREATE INDEX idx_client_risk_tolerance ON CLIENT(risk_tolerance);
+
+-- PORTFOLIO Indexes
+CREATE INDEX idx_portfolio_client ON PORTFOLIO(client_id);
+CREATE INDEX idx_portfolio_type ON PORTFOLIO(portfolio_type);
+CREATE INDEX idx_portfolio_status ON PORTFOLIO(active_status);
+
+-- ACCOUNT Indexes
+CREATE INDEX idx_account_client ON ACCOUNT(client_id);
+CREATE INDEX idx_account_portfolio ON ACCOUNT(portfolio_id);
+CREATE INDEX idx_account_number ON ACCOUNT(account_number);
+
+-- SECURITY Indexes
+CREATE INDEX idx_security_symbol ON SECURITY(symbol);
+CREATE INDEX idx_security_type ON SECURITY(security_type);
+CREATE INDEX idx_security_sector ON SECURITY(sector);
+
+USE SCHEMA TRANSACTIONS;
+
+-- HOLDING Indexes
+CREATE INDEX idx_holding_account ON HOLDING(account_id);
+CREATE INDEX idx_holding_security ON HOLDING(security_id);
+CREATE INDEX idx_holding_updated ON HOLDING(last_updated);
+
+-- TRANSACTION Indexes
+CREATE INDEX idx_transaction_account ON TRANSACTION(account_id);
+CREATE INDEX idx_transaction_security ON TRANSACTION(security_id);
+CREATE INDEX idx_transaction_date ON TRANSACTION(trade_date);
+CREATE INDEX idx_transaction_type ON TRANSACTION(transaction_type);
+
+-- PERFORMANCE Indexes
+CREATE INDEX idx_performance_portfolio ON PERFORMANCE(portfolio_id);
+CREATE INDEX idx_performance_date ON PERFORMANCE(performance_date);
+
+USE SCHEMA COMPLIANCE;
+
+-- COMPLIANCE_CHECK Indexes
+CREATE INDEX idx_compliance_client ON COMPLIANCE_CHECK(client_id);
+CREATE INDEX idx_compliance_status ON COMPLIANCE_CHECK(status);
+CREATE INDEX idx_compliance_date ON COMPLIANCE_CHECK(check_date);
+
+
+*/
+
+
+-- ==========================================
+-- STEP 7: REPORTING VIEWS
+-- ==========================================
+
+USE SCHEMA REPORTING;
+
+-- View: Current Client Portfolio Summary
+CREATE OR REPLACE VIEW VW_CLIENT_PORTFOLIO_SUMMARY AS
+SELECT 
+    c.client_id,
+    c.first_name || ' ' || c.last_name AS client_name,
+    c.email,
+    c.net_worth,
+    c.risk_tolerance,
+    c.client_since,
+    a.first_name || ' ' || a.last_name AS advisor_name,
+    a.department AS advisor_department,
+    COUNT(DISTINCT p.portfolio_id) AS portfolio_count,
+    SUM(p.total_value) AS total_portfolio_value,
+    SUM(p.cash_balance) AS total_cash_balance,
+    CASE 
+        WHEN c.net_worth >= 50000000 THEN 'Ultra High Net Worth'
+        WHEN c.net_worth >= 10000000 THEN 'High Net Worth'
+        WHEN c.net_worth >= 1000000 THEN 'Mass Affluent'
+        ELSE 'Emerging Wealth'
+    END AS wealth_tier
+FROM CORE.CLIENT c
+JOIN CORE.ADVISOR a ON c.advisor_id = a.advisor_id
+LEFT JOIN CORE.PORTFOLIO p ON c.client_id = p.client_id AND p.active_status = TRUE
+WHERE c.active_status = TRUE
+GROUP BY c.client_id, c.first_name, c.last_name, c.email, c.net_worth, 
+         c.risk_tolerance, c.client_since, a.first_name, a.last_name, a.department;
+
+-- View: Latest Portfolio Performance
+CREATE OR REPLACE VIEW VW_LATEST_PORTFOLIO_PERFORMANCE AS
+WITH latest_performance AS (
+    SELECT 
+        portfolio_id,
+        performance_date,
+        portfolio_value,
+        ytd_return,
+        one_year_return,
+        sharpe_ratio,
+        volatility,
+        benchmark_return,
+        alpha,
+        beta,
+        ROW_NUMBER() OVER (PARTITION BY portfolio_id ORDER BY performance_date DESC) AS rn
+    FROM TRANSACTIONS.PERFORMANCE
+)
+SELECT 
+    p.portfolio_id,
+    p.portfolio_name,
+    c.client_id,
+    c.first_name || ' ' || c.last_name AS client_name,
+    lp.performance_date,
+    lp.portfolio_value,
+    lp.ytd_return,
+    lp.one_year_return,
+    lp.sharpe_ratio,
+    lp.volatility,
+    lp.benchmark_return,
+    lp.ytd_return - lp.benchmark_return AS excess_return,
+    lp.alpha,
+    lp.beta,
+    CASE 
+        WHEN lp.ytd_return > lp.benchmark_return THEN 'Outperforming'
+        WHEN lp.ytd_return < lp.benchmark_return THEN 'Underperforming'
+        ELSE 'In Line'
+    END AS performance_status
+FROM CORE.PORTFOLIO p
+JOIN CORE.CLIENT c ON p.client_id = c.client_id
+JOIN latest_performance lp ON p.portfolio_id = lp.portfolio_id
+WHERE lp.rn = 1 AND p.active_status = TRUE;
+
+-- View: Account Holdings Summary
+CREATE OR REPLACE VIEW VW_ACCOUNT_HOLDINGS_SUMMARY AS
+SELECT 
+    ac.account_id,
+    ac.account_number,
+    ac.account_name,
+    c.client_id,
+    c.first_name || ' ' || c.last_name AS client_name,
+    COUNT(h.holding_id) AS holdings_count,
+    SUM(h.current_value) AS total_holdings_value,
+    SUM(h.unrealized_gain_loss) AS total_unrealized_pnl,
+    AVG(h.weight_percentage) AS avg_position_weight,
+    MAX(h.weight_percentage) AS max_position_weight,
+    ac.available_cash
+FROM CORE.ACCOUNT ac
+JOIN CORE.CLIENT c ON ac.client_id = c.client_id
+LEFT JOIN TRANSACTIONS.HOLDING h ON ac.account_id = h.account_id
+WHERE ac.active_status = TRUE
+GROUP BY ac.account_id, ac.account_number, ac.account_name, c.client_id, 
+         c.first_name, c.last_name, ac.available_cash;
+
+-- View: Advisor Performance Dashboard
+CREATE OR REPLACE VIEW VW_ADVISOR_PERFORMANCE AS
+SELECT 
+    a.advisor_id,
+    a.first_name || ' ' || a.last_name AS advisor_name,
+    a.department,
+    a.specialization,
+    COUNT(DISTINCT c.client_id) AS total_clients,
+    COUNT(DISTINCT CASE WHEN c.active_status = TRUE THEN c.client_id END) AS active_clients,
+    SUM(p.total_value) AS total_aum,
+    AVG(p.total_value) AS avg_portfolio_size,
+    SUM(p.total_value) / NULLIF(COUNT(DISTINCT c.client_id), 0) AS aum_per_client,
+    COUNT(DISTINCT rm.meeting_id) AS total_meetings_ytd,
+    ROUND(COUNT(DISTINCT rm.meeting_id) / NULLIF(COUNT(DISTINCT c.client_id), 0), 2) AS meetings_per_client
+FROM CORE.ADVISOR a
+LEFT JOIN CORE.CLIENT c ON a.advisor_id = c.advisor_id
+LEFT JOIN CORE.PORTFOLIO p ON c.client_id = p.client_id AND p.active_status = TRUE
+LEFT JOIN CORE.REVIEW_MEETING rm ON c.client_id = rm.client_id 
+    AND rm.meeting_date >= DATEADD(year, -1, CURRENT_DATE())
+WHERE a.active_status = TRUE
+GROUP BY a.advisor_id, a.first_name, a.last_name, a.department, a.specialization;
+
+-- View: Asset Allocation Summary
+CREATE OR REPLACE VIEW VW_ASSET_ALLOCATION_SUMMARY AS
+SELECT 
+    p.portfolio_id,
+    p.portfolio_name,
+    c.first_name || ' ' || c.last_name AS client_name,
+    aa.asset_class,
+    aa.target_percentage,
+    aa.current_percentage,
+    aa.variance,
+    aa.current_amount,
+    CASE 
+        WHEN ABS(aa.variance) >= 10 THEN 'High Priority'
+        WHEN ABS(aa.variance) >= 5 THEN 'Medium Priority'
+        WHEN ABS(aa.variance) >= 2 THEN 'Low Priority'
+        ELSE 'In Range'
+    END AS rebalancing_priority
+FROM CORE.PORTFOLIO p
+JOIN CORE.CLIENT c ON p.client_id = c.client_id
+JOIN TRANSACTIONS.ASSET_ALLOCATION aa ON p.portfolio_id = aa.portfolio_id
+WHERE p.active_status = TRUE AND aa.active_status = TRUE;
+
+-- View: Transaction Summary
+CREATE OR REPLACE VIEW VW_TRANSACTION_SUMMARY AS
+SELECT 
+    t.transaction_id,
+    t.trade_date,
+    t.transaction_type,
+    ac.account_number,
+    c.first_name || ' ' || c.last_name AS client_name,
+    s.symbol,
+    s.security_name,
+    t.quantity,
+    t.price,
+    t.amount,
+    t.fees,
+    t.reference_number
+FROM TRANSACTIONS.TRANSACTION t
+JOIN CORE.ACCOUNT ac ON t.account_id = ac.account_id
+JOIN CORE.CLIENT c ON ac.client_id = c.client_id
+LEFT JOIN CORE.SECURITY s ON t.security_id = s.security_id
+WHERE t.trade_date >= DATEADD(month, -6, CURRENT_DATE());
+
+-- View: Compliance Dashboard
+CREATE OR REPLACE VIEW VW_COMPLIANCE_DASHBOARD AS
+SELECT 
+    cc.compliance_id,
+    c.client_id,
+    c.first_name || ' ' || c.last_name AS client_name,
+    cc.check_type,
+    cc.compliance_rule,
+    cc.status,
+    cc.severity_level,
+    cc.check_date,
+    cc.resolution_date,
+    DATEDIFF(day, cc.check_date, COALESCE(cc.resolution_date, CURRENT_DATE())) AS days_open,
+    CASE 
+        WHEN cc.resolution_date IS NULL AND cc.severity_level = 'Critical' 
+             AND DATEDIFF(day, cc.check_date, CURRENT_DATE()) > 3 THEN 'CRITICAL'
+        WHEN cc.resolution_date IS NULL AND cc.severity_level = 'High' 
+             AND DATEDIFF(day, cc.check_date, CURRENT_DATE()) > 7 THEN 'URGENT'
+        WHEN cc.resolution_date IS NULL THEN 'OPEN'
+        ELSE 'RESOLVED'
+    END AS priority_status
+FROM COMPLIANCE.COMPLIANCE_CHECK cc
+JOIN CORE.CLIENT c ON cc.client_id = c.client_id
+WHERE cc.status != 'Resolved' OR cc.check_date >= DATEADD(day, -30, CURRENT_DATE());
+
+-- View: Revenue Summary
+CREATE OR REPLACE VIEW VW_REVENUE_SUMMARY AS
+SELECT 
+    c.client_id,
+    c.first_name || ' ' || c.last_name AS client_name,
+    DATE_TRUNC('month', b.billing_period_end) AS billing_month,
+    SUM(b.fee_amount) AS total_fees,
+    SUM(b.tax_amount) AS total_tax,
+    SUM(b.total_amount) AS total_billed,
+    SUM(CASE WHEN b.billing_status = 'Paid' THEN b.total_amount ELSE 0 END) AS total_collected,
+    SUM(CASE WHEN b.billing_status IN ('Outstanding', 'Overdue') THEN b.total_amount ELSE 0 END) AS outstanding_amount,
+    COUNT(b.billing_id) AS invoice_count
+FROM CORE.CLIENT c
+JOIN TRANSACTIONS.FEE_SCHEDULE fs ON c.client_id = fs.client_id
+JOIN TRANSACTIONS.BILLING b ON fs.fee_schedule_id = b.fee_schedule_id
+WHERE b.billing_period_end >= DATEADD(year, -1, CURRENT_DATE())
+GROUP BY c.client_id, c.first_name, c.last_name, DATE_TRUNC('month', b.billing_period_end);
+
+-- View: Client Segmentation
+CREATE OR REPLACE VIEW VW_CLIENT_SEGMENTATION AS
+SELECT 
+    c.client_id,
+    c.first_name || ' ' || c.last_name AS client_name,
+    DATEDIFF(year, c.date_of_birth, CURRENT_DATE()) AS age,
+    c.net_worth,
+    c.annual_income,
+    c.risk_tolerance,
+    c.employment_status,
+    DATEDIFF(year, c.client_since, CURRENT_DATE()) AS years_as_client,
+    CASE 
+        WHEN DATEDIFF(year, c.date_of_birth, CURRENT_DATE()) < 35 THEN 'Young Professional'
+        WHEN DATEDIFF(year, c.date_of_birth, CURRENT_DATE()) < 50 THEN 'Mid-Career'
+        WHEN DATEDIFF(year, c.date_of_birth, CURRENT_DATE()) < 65 THEN 'Pre-Retirement'
+        ELSE 'Retirement'
+    END AS age_segment,
+    CASE 
+        WHEN c.net_worth >= 50000000 THEN 'Ultra High Net Worth (50M+)'
+        WHEN c.net_worth >= 10000000 THEN 'High Net Worth (10M-50M)'
+        WHEN c.net_worth >= 1000000 THEN 'Mass Affluent (1M-10M)'
+        ELSE 'Emerging Wealth (<1M)'
+    END AS wealth_segment,
+    SUM(p.total_value) AS total_portfolio_value,
+    COUNT(DISTINCT rm.meeting_id) AS annual_meetings,
+    COUNT(DISTINCT g.goal_id) AS active_goals
+FROM CORE.CLIENT c
+LEFT JOIN CORE.PORTFOLIO p ON c.client_id = p.client_id AND p.active_status = TRUE
+LEFT JOIN CORE.REVIEW_MEETING rm ON c.client_id = rm.client_id 
+    AND rm.meeting_date >= DATEADD(year, -1, CURRENT_DATE())
+LEFT JOIN CORE.GOAL g ON c.client_id = g.client_id AND g.status = 'Active'
+WHERE c.active_status = TRUE
+GROUP BY c.client_id, c.first_name, c.last_name, c.date_of_birth, 
+         c.net_worth, c.annual_income, c.risk_tolerance, c.employment_status, c.client_since;
+
+-- View: Security Performance
+CREATE OR REPLACE VIEW VW_SECURITY_PERFORMANCE AS
+SELECT 
+    s.security_id,
+    s.symbol,
+    s.security_name,
+    s.security_type,
+    s.sector,
+    s.industry,
+    s.current_price,
+    s.dividend_yield,
+    s.beta,
+    COUNT(DISTINCT h.account_id) AS held_by_accounts,
+    SUM(h.quantity) AS total_quantity,
+    SUM(h.current_value) AS total_market_value,
+    AVG(h.average_cost) AS avg_cost_basis,
+    SUM(h.unrealized_gain_loss) AS total_unrealized_pnl,
+    (s.current_price - AVG(h.average_cost)) / NULLIF(AVG(h.average_cost), 0) * 100 AS performance_pct,
+    AVG(h.weight_percentage) AS avg_portfolio_weight
+FROM CORE.SECURITY s
+JOIN TRANSACTIONS.HOLDING h ON s.security_id = h.security_id
+WHERE s.active_status = TRUE
+GROUP BY s.security_id, s.symbol, s.security_name, s.security_type, 
+         s.sector, s.industry, s.current_price, s.dividend_yield, s.beta
+HAVING SUM(h.current_value) > 10000;
+
+-- ==========================================
+-- STEP 8: ANALYTICS SCHEMA - MATERIALIZED VIEWS
+-- ==========================================
+
+USE SCHEMA ANALYTICS;
+
+-- Materialized View: Daily AUM Snapshot
+CREATE OR REPLACE TABLE MV_DAILY_AUM_SNAPSHOT AS
+SELECT 
+    CURRENT_DATE() AS snapshot_date,
+    c.client_id,
+    c.first_name || ' ' || c.last_name AS client_name,
+    a.advisor_id,
+    a.first_name || ' ' || a.last_name AS advisor_name,
+    CASE 
+        WHEN c.net_worth >= 50000000 THEN 'Ultra High Net Worth'
+        WHEN c.net_worth >= 10000000 THEN 'High Net Worth'
+        WHEN c.net_worth >= 1000000 THEN 'Mass Affluent'
+        ELSE 'Emerging Wealth'
+    END AS client_tier,
+    SUM(p.total_value) AS total_aum,
+    COUNT(DISTINCT p.portfolio_id) AS portfolio_count
+FROM CORE.CLIENT c
+JOIN CORE.ADVISOR a ON c.advisor_id = a.advisor_id
+LEFT JOIN CORE.PORTFOLIO p ON c.client_id = p.client_id AND p.active_status = TRUE
+WHERE c.active_status = TRUE
+GROUP BY c.client_id, c.first_name, c.last_name, c.net_worth,
+         a.advisor_id, a.first_name, a.last_name;
+
+-- Materialized View: Monthly Revenue Summary
+CREATE OR REPLACE TABLE MV_MONTHLY_REVENUE AS
+SELECT 
+    DATE_TRUNC('month', b.billing_period_end) AS revenue_month,
+    c.client_id,
+    c.first_name || ' ' || c.last_name AS client_name,
+    fs.fee_type,
+    SUM(b.fee_amount) AS monthly_fees,
+    SUM(b.tax_amount) AS monthly_tax,
+    SUM(b.total_amount) AS monthly_revenue,
+    COUNT(b.billing_id) AS invoice_count,
+    AVG(b.portfolio_value) AS avg_portfolio_value
+FROM TRANSACTIONS.BILLING b
+JOIN TRANSACTIONS.FEE_SCHEDULE fs ON b.fee_schedule_id = fs.fee_schedule_id
+JOIN CORE.CLIENT c ON fs.client_id = c.client_id
+GROUP BY DATE_TRUNC('month', b.billing_period_end), c.client_id, 
+         c.first_name, c.last_name, fs.fee_type;
+
+-- Materialized View: Portfolio Risk Summary
+CREATE OR REPLACE TABLE MV_PORTFOLIO_RISK_SUMMARY AS
+WITH latest_performance AS (
+    SELECT 
+        portfolio_id,
+        volatility,
+        beta,
+        sharpe_ratio,
+        ROW_NUMBER() OVER (PARTITION BY portfolio_id ORDER BY performance_date DESC) AS rn
+    FROM TRANSACTIONS.PERFORMANCE
+)
+SELECT 
+    p.portfolio_id,
+    p.portfolio_name,
+    c.client_id,
+    c.first_name || ' ' || c.last_name AS client_name,
+    c.risk_tolerance,
+    p.total_value AS portfolio_value,
+    lp.volatility,
+    lp.beta,
+    lp.sharpe_ratio,
+    MAX(h.weight_percentage) AS max_position_weight,
+    COUNT(DISTINCT h.holding_id) AS number_of_holdings,
+    p.total_value * lp.volatility * 1.96 / SQRT(252) AS daily_var_95,
+    CASE 
+        WHEN lp.volatility > 20 THEN 'High Risk'
+        WHEN lp.volatility > 12 THEN 'Medium Risk'
+        ELSE 'Low Risk'
+    END AS risk_category
+FROM CORE.PORTFOLIO p
+JOIN CORE.CLIENT c ON p.client_id = c.client_id
+LEFT JOIN latest_performance lp ON p.portfolio_id = lp.portfolio_id AND lp.rn = 1
+LEFT JOIN CORE.ACCOUNT ac ON p.portfolio_id = ac.portfolio_id
+LEFT JOIN TRANSACTIONS.HOLDING h ON ac.account_id = h.account_id
+WHERE p.active_status = TRUE
+GROUP BY p.portfolio_id, p.portfolio_name, c.client_id, c.first_name, c.last_name,
+         c.risk_tolerance, p.total_value, lp.volatility, lp.beta, lp.sharpe_ratio;
+
+-- ==========================================
+-- STEP 9: STORED PROCEDURES
+-- ==========================================
+
+USE SCHEMA CORE;
+
+-- Procedure: Update Portfolio Values
+CREATE OR REPLACE PROCEDURE SP_UPDATE_PORTFOLIO_VALUES()
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    -- Update portfolio total values based on holdings using a JOIN
+    UPDATE CORE.PORTFOLIO AS p
+    SET 
+        total_value = ph.sum_holding_value + p.cash_balance,
+        updated_at = CURRENT_TIMESTAMP()
+    FROM (
+        -- Subquery to calculate the total holding value for each portfolio
+        SELECT 
+            ac.portfolio_id,
+            COALESCE(SUM(h.current_value), 0) AS sum_holding_value
+        FROM CORE.ACCOUNT AS ac
+        LEFT JOIN TRANSACTIONS.HOLDING AS h ON ac.account_id = h.account_id
+        WHERE ac.active_status = TRUE
+        GROUP BY ac.portfolio_id
+    ) AS ph
+    WHERE p.portfolio_id = ph.portfolio_id
+    AND p.active_status = TRUE;
+    
+    RETURN 'Portfolio values updated successfully';
+END;
+$$;
+
+
+call core.SP_UPDATE_PORTFOLIO_VALUES();
+
+
+
+
+
+-- Procedure: Calculate Unrealized Gains/Losses
+CREATE OR  REPLACE PROCEDURE SP_CALCULATE_UNREALIZED_PNL()
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    -- Update unrealized gains/losses for all holdings using a JOIN
+    UPDATE TRANSACTIONS.HOLDING AS h
+    SET 
+        unrealized_gain_loss = (s.current_price - h.average_cost) * h.quantity,
+        current_value = s.current_price * h.quantity,
+        updated_at = CURRENT_TIMESTAMP()
+    FROM CORE.SECURITY AS s
+    WHERE h.security_id = s.security_id;
+    
+    RETURN 'Unrealized PnL calculated successfully';
+END;
+$$;
+
+
+call core.SP_CALCULATE_UNREALIZED_PNL();
+
+-- Procedure: Generate Monthly Billing
+CREATE OR REPLACE PROCEDURE SP_GENERATE_MONTHLY_BILLING(
+    billing_month DATE
+)
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+DECLARE
+    records_created INTEGER;
+BEGIN
+    -- Insert billing records for active fee schedules
+    INSERT INTO TRANSACTIONS.BILLING (
+        client_id,
+        fee_schedule_id,
+        billing_period_start,
+        billing_period_end,
+        portfolio_value,
+        fee_amount,
+        tax_amount,
+        total_amount,
+        billing_status,
+        invoice_date,
+        due_date
+    )
+    SELECT 
+        fs.client_id,
+        fs.fee_schedule_id,
+        DATE_TRUNC('month', :billing_month) AS billing_period_start,
+        LAST_DAY(:billing_month) AS billing_period_end,
+        SUM(p.total_value) AS portfolio_value,
+        GREATEST(
+            LEAST(
+                SUM(p.total_value) * (fs.fee_rate / 100.0) / 12,
+                fs.maximum_fee
+            ),
+            fs.minimum_fee
+        ) AS fee_amount,
+        0 AS tax_amount,
+        GREATEST(
+            LEAST(
+                SUM(p.total_value) * (fs.fee_rate / 100.0) / 12,
+                fs.maximum_fee
+            ),
+            fs.minimum_fee
+        ) AS total_amount,
+        'Pending' AS billing_status,
+        CURRENT_DATE() AS invoice_date,
+        DATEADD(day, 30, CURRENT_DATE()) AS due_date
+    FROM TRANSACTIONS.FEE_SCHEDULE fs
+    JOIN CORE.CLIENT c ON fs.client_id = c.client_id
+    JOIN CORE.PORTFOLIO p ON c.client_id = p.client_id
+    WHERE fs.active_status = TRUE
+    AND c.active_status = TRUE
+    AND p.active_status = TRUE
+    AND fs.effective_date <= :billing_month
+    AND (fs.end_date IS NULL OR fs.end_date >= :billing_month)
+    GROUP BY fs.client_id, fs.fee_schedule_id, fs.fee_rate, 
+             fs.minimum_fee, fs.maximum_fee;
+    
+    records_created := SQLROWCOUNT;
+    
+    RETURN 'Generated ' || records_created || ' billing records for ' || TO_CHAR(:billing_month, 'YYYY-MM');
+END;
+$$;
+
+
+call core.SP_GENERATE_MONTHLY_BILLING('2024-10-01');
+
+-- Procedure: Rebalance Portfolio Check
+CREATE OR REPLACE PROCEDURE SP_REBALANCE_PORTFOLIO_CHECK(
+    p_portfolio_id INTEGER
+)
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+DECLARE
+    rebalance_needed BOOLEAN;
+    max_variance DECIMAL(8,4);
+BEGIN
+    -- Check if rebalancing is needed
+    SELECT 
+        MAX(ABS(variance)) > 5,
+        MAX(ABS(variance))
+    INTO rebalance_needed, max_variance
+    FROM TRANSACTIONS.ASSET_ALLOCATION
+    WHERE portfolio_id = :p_portfolio_id
+    AND active_status = TRUE;
+    
+    IF (rebalance_needed) THEN
+        RETURN 'Portfolio ' || :p_portfolio_id || ' needs rebalancing. Max variance: ' || max_variance || '%';
+    ELSE
+        RETURN 'Portfolio ' || :p_portfolio_id || ' is within acceptable allocation ranges.';
+    END IF;
+END;
+$$;
+
+call core.SP_REBALANCE_PORTFOLIO_CHECK('12345565');
+
+-- Procedure: Validate Data Constraints
+CREATE OR REPLACE PROCEDURE SP_VALIDATE_DATA_CONSTRAINTS()
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+DECLARE
+    total_violations INTEGER;
+BEGIN
+    -- Count total constraint violations
+    SELECT COUNT(*)
+    INTO total_violations
+    FROM (
+        SELECT client_id FROM VALIDATION.VW_INVALID_RISK_TOLERANCE
+        UNION ALL
+        SELECT client_id FROM VALIDATION.VW_INVALID_KYC_STATUS
+        UNION ALL
+        SELECT advisor_id FROM VALIDATION.VW_INVALID_COMMISSION_RATES
+        UNION ALL
+        SELECT portfolio_id FROM VALIDATION.VW_NEGATIVE_PORTFOLIO_VALUES
+        UNION ALL
+        SELECT account_id FROM VALIDATION.VW_NEGATIVE_ACCOUNT_VALUES
+    ) violations;
+    
+    IF (total_violations > 0) THEN
+        RETURN 'WARNING: Found ' || total_violations || ' constraint violations. Check VALIDATION schema views for details.';
+    ELSE
+        RETURN 'SUCCESS: No constraint violations found.';
+    END IF;
+END;
+$$;
+
+call core.SP_VALIDATE_DATA_CONSTRAINTS();
+
+-- ==========================================
+-- STEP 10: TASKS FOR AUTOMATION
+-- ==========================================
+
+USE SCHEMA CORE;
+
+-- Task: Daily Portfolio Value Update
+CREATE OR REPLACE TASK TSK_DAILY_PORTFOLIO_UPDATE
+    WAREHOUSE = COMPUTE_WH
+    SCHEDULE = 'USING CRON 0 18 * * * America/New_York'
+AS
+    CALL SP_UPDATE_PORTFOLIO_VALUES();
+
+-- Task: Daily PnL Calculation
+
+CREATE OR REPLACE TASK TSK_DAILY_PNL_CALCULATION
+    WAREHOUSE = COMPUTE_WH
+    -- SCHEDULE = 'USING CRON 30 18 * * * America/New_York' -- Removed the schedule
+    AFTER TSK_DAILY_PORTFOLIO_UPDATE
+AS
+    CALL SP_CALCULATE_UNREALIZED_PNL();
+
+    /*
+CREATE OR REPLACE TASK TSK_DAILY_PNL_CALCULATION
+    WAREHOUSE = COMPUTE_WH
+    SCHEDULE = 'USING CRON 30 18 * * * America/New_York'
+    AFTER TSK_DAILY_PORTFOLIO_UPDATE
+AS
+    CALL SP_CALCULATE_UNREALIZED_PNL();
+*/
+
+
+-- Task: Monthly Billing Generation
+CREATE OR REPLACE TASK TSK_MONTHLY_BILLING
+    WAREHOUSE = COMPUTE_WH
+    SCHEDULE = 'USING CRON 0 9 1 * * America/New_York'
+AS
+    CALL SP_GENERATE_MONTHLY_BILLING(CURRENT_DATE());
+
+-- Task: Daily Data Validation
+CREATE OR REPLACE TASK TSK_DAILY_VALIDATION
+    WAREHOUSE = COMPUTE_WH
+    SCHEDULE = 'USING CRON 0 6 * * * America/New_York'
+AS
+    CALL SP_VALIDATE_DATA_CONSTRAINTS();
+
+-- ==========================================
+-- STEP 11: SAMPLE DATA INSERTION
+-- ==========================================
+
+USE SCHEMA CORE;
+
+-- Insert Sample Advisors
+INSERT INTO ADVISOR (first_name, last_name, email, phone, employee_id, department, license_number, hire_date, commission_rate, specialization)
+VALUES 
+    ('Michael', 'Chen', 'michael.chen@wealthmgmt.com', '555-0101', 'EMP001', 'Private Banking', 'Series 7, 65', '2018-03-15', 0.25, 'High Net Worth'),
+    ('Jennifer', 'Park', 'jennifer.park@wealthmgmt.com', '555-0102', 'EMP002', 'Investment Management', 'CFA, Series 7', '2017-06-20', 0.30, 'Ultra High Net Worth'),
+    ('David', 'Thompson', 'david.thompson@wealthmgmt.com', '555-0103', 'EMP003', 'Retirement Planning', 'CFP, Series 65', '2019-01-10', 0.20, 'Retirement'),
+    ('Lisa', 'Zhang', 'lisa.zhang@wealthmgmt.com', '555-0104', 'EMP004', 'Private Banking', 'Series 7, 63', '2020-09-01', 0.25, 'Estate Planning');
+
+-- Insert Sample Clients
+INSERT INTO CLIENT (first_name, last_name, email, phone, address, city, state, zip_code, date_of_birth, employment_status, annual_income, net_worth, risk_tolerance, client_since, kyc_status, kyc_completion_date, advisor_id)
+VALUES 
+    ('Sarah', 'Johnson', 'sarah.johnson@email.com', '555-1001', '123 Oak Street', 'New York', 'NY', '10001', '1975-05-15', 'Employed', 350000, 2450000, 'Moderate', '2020-01-15', 'Current', '2024-01-15', 1),
+    ('Robert', 'Williams', 'robert.williams@email.com', '555-1002', '456 Elm Avenue', 'Los Angeles', 'CA', '90001', '1968-08-22', 'Self-employed', 850000, 5750000, 'Aggressive', '2019-06-20', 'Current', '2024-06-20', 2),
+    ('Maria', 'Rodriguez', 'maria.rodriguez@email.com', '555-1003', '789 Pine Road', 'Chicago', 'IL', '60601', '1980-03-10', 'Employed', 180000, 1200000, 'Conservative', '2021-03-10', 'Current', '2024-03-10', 3),
+    ('James', 'Anderson', 'james.anderson@email.com', '555-1004', '321 Maple Drive', 'Houston', 'TX', '77001', '1972-11-30', 'Employed', 920000, 8300000, 'Aggressive', '2018-09-15', 'Current', '2024-09-15', 2),
+    ('Patricia', 'Davis', 'patricia.davis@email.com', '555-1005', '654 Cedar Lane', 'Phoenix', 'AZ', '85001', '1978-07-18', 'Employed', 420000, 3100000, 'Moderate', '2020-11-01', 'Current', '2024-11-01', 1);
+
+-- Insert Sample Portfolios
+INSERT INTO PORTFOLIO (client_id, portfolio_name, portfolio_type, total_value, cash_balance, investment_objective, time_horizon, inception_date, benchmark)
+VALUES 
+    (1, 'Growth Portfolio', 'Taxable', 2450000, 125000, 'Growth', '10-15 years', '2020-01-15', 'S&P 500'),
+    (2, 'Aggressive Growth', 'Taxable', 5750000, 275000, 'Aggressive Growth', '15+ years', '2019-06-20', 'NASDAQ Composite'),
+    (3, 'Conservative Income', 'IRA', 1200000, 60000, 'Income & Preservation', '5-10 years', '2021-03-10', 'Aggregate Bond Index'),
+    (4, 'Diversified Growth', 'Trust', 8300000, 415000, 'Growth', '20+ years', '2018-09-15', 'MSCI World'),
+    (5, 'Balanced Portfolio', 'Taxable', 3100000, 155000, 'Balanced', '10-15 years', '2020-11-01', '60/40 Balanced');
+
+-- Insert Sample Securities
+INSERT INTO SECURITY (symbol, security_name, security_type, sector, industry, exchange, current_price, price_date, dividend_yield, beta, market_cap)
+VALUES 
+    ('AAPL', 'Apple Inc.', 'Stock', 'Technology', 'Consumer Electronics', 'NASDAQ', 178.50, CURRENT_DATE(), 0.52, 1.18, 2800000000000),
+    ('MSFT', 'Microsoft Corporation', 'Stock', 'Technology', 'Software', 'NASDAQ', 378.25, CURRENT_DATE(), 0.78, 0.92, 2810000000000),
+    ('JNJ', 'Johnson & Johnson', 'Stock', 'Healthcare', 'Pharmaceuticals', 'NYSE', 158.75, CURRENT_DATE(), 2.95, 0.68, 395000000000),
+    ('VOO', 'Vanguard S&P 500 ETF', 'ETF', 'Diversified', 'Index Fund', 'NYSE', 425.80, CURRENT_DATE(), 1.45, 1.00, NULL),
+    ('BND', 'Vanguard Total Bond Market ETF', 'ETF', 'Fixed Income', 'Bond Fund', 'NASDAQ', 78.25, CURRENT_DATE(), 3.20, 0.05, NULL),
+    ('VTI', 'Vanguard Total Stock Market ETF', 'ETF', 'Diversified', 'Index Fund', 'NYSE', 238.50, CURRENT_DATE(), 1.35, 1.02, NULL),
+    ('TSLA', 'Tesla Inc.', 'Stock', 'Consumer Cyclical', 'Auto Manufacturers', 'NASDAQ', 242.80, CURRENT_DATE(), 0.00, 2.05, 770000000000);
+
+-- ==========================================
+-- STEP 12: DATA QUALITY DASHBOARD
+-- ==========================================
+
+USE SCHEMA VALIDATION;
+
+-- View: Comprehensive Data Quality Dashboard
+CREATE OR REPLACE VIEW VW_DATA_QUALITY_DASHBOARD AS
+SELECT 
+    'Clients without Advisor' AS check_name,
+    COUNT(*) AS issue_count,
+    'CRITICAL' AS severity
+FROM CORE.CLIENT 
+WHERE advisor_id IS NULL AND active_status = TRUE
+
+UNION ALL
+
+SELECT 
+    'Portfolios with Zero Value' AS check_name,
+    COUNT(*) AS issue_count,
+    'HIGH' AS severity
+FROM CORE.PORTFOLIO 
+WHERE total_value = 0 AND active_status = TRUE
+
+UNION ALL
+
+SELECT 
+    'Accounts without Portfolios' AS check_name,
+    COUNT(*) AS issue_count,
+    'HIGH' AS severity
+FROM CORE.ACCOUNT 
+WHERE portfolio_id IS NULL AND active_status = TRUE
+
+UNION ALL
+
+SELECT 
+    'Expired KYC (>365 days)' AS check_name,
+    COUNT(*) AS issue_count,
+    'CRITICAL' AS severity
+FROM CORE.CLIENT 
+WHERE active_status = TRUE 
+AND (kyc_completion_date IS NULL OR DATEDIFF(day, kyc_completion_date, CURRENT_DATE()) > 365)
+
+UNION ALL
+
+SELECT 
+    'Securities without Current Price' AS check_name,
+    COUNT(*) AS issue_count,
+    'MEDIUM' AS severity
+FROM CORE.SECURITY 
+WHERE active_status = TRUE 
+AND (current_price IS NULL OR price_date < CURRENT_DATE() - 7)
+
+UNION ALL
+
+SELECT 
+    'Invalid Risk Tolerance Values' AS check_name,
+    COUNT(*) AS issue_count,
+    'HIGH' AS severity
+FROM VALIDATION.VW_INVALID_RISK_TOLERANCE
+
+UNION ALL
+
+SELECT 
+    'Invalid Commission Rates' AS check_name,
+    COUNT(*) AS issue_count,
+    'MEDIUM' AS severity
+FROM VALIDATION.VW_INVALID_COMMISSION_RATES
+
+UNION ALL
+
+SELECT 
+    'Negative Portfolio Values' AS check_name,
+    COUNT(*) AS issue_count,
+    'CRITICAL' AS severity
+FROM VALIDATION.VW_NEGATIVE_PORTFOLIO_VALUES;
+
+-- ==========================================
+-- STEP 13: GRANTS AND SECURITY
+-- ==========================================
+
+-- Create Roles
+CREATE ROLE IF NOT EXISTS WEALTH_ADMIN;
+CREATE ROLE IF NOT EXISTS WEALTH_ANALYST;
+CREATE ROLE IF NOT EXISTS WEALTH_ADVISOR;
+CREATE ROLE IF NOT EXISTS WEALTH_READONLY;
+
+-- Grant database usage
+GRANT USAGE ON DATABASE WEALTH_MANAGEMENT TO ROLE WEALTH_READONLY;
+GRANT USAGE ON SCHEMA CORE TO ROLE WEALTH_READONLY;
+GRANT USAGE ON SCHEMA REPORTING TO ROLE WEALTH_READONLY;
+GRANT USAGE ON SCHEMA VALIDATION TO ROLE WEALTH_READONLY;
+
+-- Grant select permissions on reporting views
+GRANT SELECT ON ALL VIEWS IN SCHEMA REPORTING TO ROLE WEALTH_READONLY;
+GRANT SELECT ON ALL VIEWS IN SCHEMA VALIDATION TO ROLE WEALTH_READONLY;
+GRANT SELECT ON ALL VIEWS IN SCHEMA REPORTING TO ROLE WEALTH_ADVISOR;
+GRANT SELECT ON ALL VIEWS IN SCHEMA REPORTING TO ROLE WEALTH_ANALYST;
+
+-- Grant full permissions to admin
+GRANT ALL ON DATABASE WEALTH_MANAGEMENT TO ROLE WEALTH_ADMIN;
+GRANT ALL ON ALL SCHEMAS IN DATABASE WEALTH_MANAGEMENT TO ROLE WEALTH_ADMIN;
+GRANT ALL ON ALL TABLES IN DATABASE WEALTH_MANAGEMENT TO ROLE WEALTH_ADMIN;
+GRANT ALL ON ALL VIEWS IN DATABASE WEALTH_MANAGEMENT TO ROLE WEALTH_ADMIN;
+
+-- Grant analyst permissions
+GRANT USAGE ON DATABASE WEALTH_MANAGEMENT TO ROLE WEALTH_ANALYST;
+GRANT USAGE ON ALL SCHEMAS IN DATABASE WEALTH_MANAGEMENT TO ROLE WEALTH_ANALYST;
+GRANT SELECT ON ALL TABLES IN SCHEMA CORE TO ROLE WEALTH_ANALYST;
+GRANT SELECT ON ALL TABLES IN SCHEMA TRANSACTIONS TO ROLE WEALTH_ANALYST;
+GRANT SELECT ON ALL TABLES IN SCHEMA ANALYTICS TO ROLE WEALTH_ANALYST;
+GRANT SELECT ON ALL VIEWS IN SCHEMA REPORTING TO ROLE WEALTH_ANALYST;
+
+-- Grant advisor permissions
+GRANT USAGE ON DATABASE WEALTH_MANAGEMENT TO ROLE WEALTH_ADVISOR;
+GRANT USAGE ON SCHEMA CORE TO ROLE WEALTH_ADVISOR;
+GRANT USAGE ON SCHEMA REPORTING TO ROLE WEALTH_ADVISOR;
+GRANT SELECT ON ALL TABLES IN SCHEMA CORE TO ROLE WEALTH_ADVISOR;
+GRANT SELECT ON ALL VIEWS IN SCHEMA REPORTING TO ROLE WEALTH_ADVISOR;
+
+-- ==========================================
+-- STEP 14: HELPFUL QUERIES AND DOCUMENTATION
+-- ==========================================
+
+USE SCHEMA REPORTING;
+
+-- Query: Verification Summary
+CREATE OR REPLACE VIEW VW_DATABASE_SETUP_SUMMARY AS
+SELECT 
+    'Database' AS object_type,
+    'WEALTH_MANAGEMENT' AS object_name,
+    'Created' AS status,
+    CURRENT_TIMESTAMP() AS verified_at
+
+UNION ALL
+
+SELECT 
+    'Schema' AS object_type,
+    SCHEMA_NAME AS object_name,
+    'Created' AS status,
+    CURRENT_TIMESTAMP() AS verified_at
+FROM INFORMATION_SCHEMA.SCHEMATA 
+WHERE SCHEMA_NAME IN ('CORE', 'TRANSACTIONS', 'ANALYTICS', 'COMPLIANCE', 'REPORTING', 'VALIDATION')
+
+UNION ALL
+
+SELECT 
+    'Table' AS object_type,
+    TABLE_SCHEMA || '.' || TABLE_NAME AS object_name,
+    'Created' AS status,
+    CURRENT_TIMESTAMP() AS verified_at
+FROM INFORMATION_SCHEMA.TABLES 
+WHERE TABLE_SCHEMA IN ('CORE', 'TRANSACTIONS', 'COMPLIANCE', 'ANALYTICS')
+AND TABLE_TYPE = 'BASE TABLE'
+
+UNION ALL
+
+SELECT 
+    'View' AS object_type,
+    TABLE_SCHEMA || '.' || TABLE_NAME AS object_name,
+    'Created' AS status,
+    CURRENT_TIMESTAMP() AS verified_at
+FROM INFORMATION_SCHEMA.VIEWS 
+WHERE TABLE_SCHEMA IN ('REPORTING', 'VALIDATION')
+
+UNION ALL
+
+SELECT 
+    'Stored Procedure' AS object_type,
+    PROCEDURE_SCHEMA || '.' || PROCEDURE_NAME AS object_name,
+    'Created' AS status,
+    CURRENT_TIMESTAMP() AS verified_at
+FROM INFORMATION_SCHEMA.PROCEDURES
+WHERE PROCEDURE_SCHEMA = 'CORE';
+
+-- ==========================================
+-- STEP 15: USAGE EXAMPLES AND BEST PRACTICES
+-- ==========================================
+
+/*
+===========================================
+USAGE EXAMPLES AND BEST PRACTICES
+===========================================
+
+1. INSERTING DATA WITH VALIDATION
+-----------------------------------
+-- Always validate data before insertion:
+
+-- Check validation views before inserting:
+SELECT * FROM VALIDATION.VW_INVALID_RISK_TOLERANCE;
+
+-- Insert client with proper values:
+INSERT INTO CORE.CLIENT (
+    first_name, last_name, email, risk_tolerance, 
+    advisor_id, kyc_status
+)
+VALUES (
+    'John', 'Doe', 'john.doe@email.com', 'Moderate',  -- Valid: Conservative, Moderate, Aggressive
+    1, 'Current'  -- Valid: Pending, Current, Expired, Under Review
+);
+
+
+2. RUNNING STORED PROCEDURES
+-----------------------------
+-- Update portfolio values daily:
+CALL CORE.SP_UPDATE_PORTFOLIO_VALUES();
+
+-- Calculate unrealized PnL:
+CALL CORE.SP_CALCULATE_UNREALIZED_PNL();
+
+-- Generate monthly billing:
+CALL CORE.SP_GENERATE_MONTHLY_BILLING('2024-11-01');
+
+-- Check portfolio rebalancing needs:
+CALL CORE.SP_REBALANCE_PORTFOLIO_CHECK(1);
+
+-- Validate all data constraints:
+CALL CORE.SP_VALIDATE_DATA_CONSTRAINTS();
+
+
+3. QUERYING REPORTING VIEWS
+----------------------------
+-- Get client portfolio summary:
+SELECT * FROM REPORTING.VW_CLIENT_PORTFOLIO_SUMMARY
+WHERE wealth_tier = 'High Net Worth';
+
+-- Check latest portfolio performance:
+SELECT * FROM REPORTING.VW_LATEST_PORTFOLIO_PERFORMANCE
+WHERE performance_status = 'Outperforming'
+ORDER BY ytd_return DESC;
+
+-- Monitor compliance issues:
+SELECT * FROM REPORTING.VW_COMPLIANCE_DASHBOARD
+WHERE priority_status IN ('CRITICAL', 'URGENT');
+
+-- Review advisor performance:
+SELECT * FROM REPORTING.VW_ADVISOR_PERFORMANCE
+ORDER BY total_aum DESC;
+
+
+4. DATA QUALITY MONITORING
+---------------------------
+-- Check all data quality issues:
+SELECT * FROM VALIDATION.VW_DATA_QUALITY_DASHBOARD
+WHERE issue_count > 0;
+
+-- Check specific constraint violations:
+SELECT * FROM VALIDATION.VW_INVALID_RISK_TOLERANCE;
+SELECT * FROM VALIDATION.VW_NEGATIVE_PORTFOLIO_VALUES;
+SELECT * FROM VALIDATION.VW_INVALID_TRANSACTION_TYPES;
+
+
+5. ENABLING AUTOMATED TASKS
+----------------------------
+-- Enable tasks after verification (run as ACCOUNTADMIN):
+
+USE ROLE ACCOUNTADMIN;
+
+-- Enable daily portfolio updates
+ALTER TASK CORE.TSK_DAILY_PORTFOLIO_UPDATE RESUME;
+
+-- Enable daily PnL calculations
+ALTER TASK CORE.TSK_DAILY_PNL_CALCULATION RESUME;
+
+-- Enable monthly billing
+ALTER TASK CORE.TSK_MONTHLY_BILLING RESUME;
+
+-- Enable daily validation
+ALTER TASK CORE.TSK_DAILY_VALIDATION RESUME;
+
+-- Check task status:
+SHOW TASKS IN SCHEMA CORE;
+
+
+6. REFRESHING MATERIALIZED VIEWS
+---------------------------------
+-- Refresh daily AUM snapshot:
+CREATE OR REPLACE TABLE ANALYTICS.MV_DAILY_AUM_SNAPSHOT AS
+SELECT * FROM (
+    SELECT 
+        CURRENT_DATE() AS snapshot_date,
+        c.client_id,
+        c.first_name || ' ' || c.last_name AS client_name,
+        a.advisor_id,
+        a.first_name || ' ' || a.last_name AS advisor_name,
+        CASE 
+            WHEN c.net_worth >= 50000000 THEN 'Ultra High Net Worth'
+            WHEN c.net_worth >= 10000000 THEN 'High Net Worth'
+            WHEN c.net_worth >= 1000000 THEN 'Mass Affluent'
+            ELSE 'Emerging Wealth'
+        END AS client_tier,
+        SUM(p.total_value) AS total_aum,
+        COUNT(DISTINCT p.portfolio_id) AS portfolio_count
+    FROM CORE.CLIENT c
+    JOIN CORE.ADVISOR a ON c.advisor_id = a.advisor_id
+    LEFT JOIN CORE.PORTFOLIO p ON c.client_id = p.client_id AND p.active_status = TRUE
+    WHERE c.active_status = TRUE
+    GROUP BY c.client_id, c.first_name, c.last_name, c.net_worth,
+             a.advisor_id, a.first_name, a.last_name
+);
+
+
+7. COMMON ANALYTICAL QUERIES
+-----------------------------
+-- Total AUM by advisor:
+SELECT 
+    advisor_name,
+    total_aum,
+    active_clients,
+    aum_per_client
+FROM REPORTING.VW_ADVISOR_PERFORMANCE
+ORDER BY total_aum DESC;
+
+-- Clients needing KYC renewal:
+SELECT 
+    client_id,
+    first_name || ' ' || last_name AS client_name,
+    kyc_completion_date,
+    DATEDIFF(day, kyc_completion_date, CURRENT_DATE()) AS days_since_kyc
+FROM CORE.CLIENT
+WHERE active_status = TRUE
+AND DATEDIFF(day, kyc_completion_date, CURRENT_DATE()) > 330
+ORDER BY kyc_completion_date;
+
+-- Portfolio rebalancing candidates:
+SELECT 
+    portfolio_name,
+    client_name,
+    asset_class,
+    variance,
+    rebalancing_priority
+FROM REPORTING.VW_ASSET_ALLOCATION_SUMMARY
+WHERE rebalancing_priority IN ('High Priority', 'Medium Priority')
+ORDER BY ABS(variance) DESC;
+
+
+8. PERFORMANCE OPTIMIZATION TIPS
+---------------------------------
+-- Use clustering for large tables:
+ALTER TABLE TRANSACTIONS.TRANSACTION CLUSTER BY (trade_date);
+ALTER TABLE TRANSACTIONS.PERFORMANCE CLUSTER BY (performance_date);
+
+-- Create search optimization for frequently searched columns:
+ALTER TABLE CORE.CLIENT ADD SEARCH OPTIMIZATION ON EQUALITY(email, ssn);
+ALTER TABLE CORE.SECURITY ADD SEARCH OPTIMIZATION ON EQUALITY(symbol);
+
+-- Monitor query performance:
+SELECT * 
+FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY())
+WHERE QUERY_TEXT LIKE '%WEALTH_MANAGEMENT%'
+ORDER BY START_TIME DESC
+LIMIT 100;
+
+
+9. BACKUP AND RECOVERY
+-----------------------
+-- Clone database for testing:
+CREATE DATABASE WEALTH_MANAGEMENT_DEV CLONE WEALTH_MANAGEMENT;
+
+-- Time travel to recover data:
+SELECT * 
+FROM CORE.CLIENT 
+AT(OFFSET => -3600);  -- 1 hour ago
+
+-- Restore deleted records:
+INSERT INTO CORE.CLIENT
+SELECT * FROM CORE.CLIENT 
+AT(TIMESTAMP => '2024-11-01 09:00:00'::TIMESTAMP_NTZ)
+WHERE client_id = 123;
+
+
+10. MONITORING AND ALERTS
+--------------------------
+-- Check for data quality issues daily:
+SELECT * FROM VALIDATION.VW_DATA_QUALITY_DASHBOARD;
+
+-- Monitor failed transactions:
+SELECT COUNT(*) as failed_count
+FROM INFORMATION_SCHEMA.TASK_HISTORY
+WHERE STATE = 'FAILED'
+AND SCHEDULED_TIME >= DATEADD(day, -1, CURRENT_TIMESTAMP());
+
+-- Check table row counts:
+SELECT 
+    TABLE_SCHEMA,
+    TABLE_NAME,
+    ROW_COUNT
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA IN ('CORE', 'TRANSACTIONS')
+ORDER BY TABLE_SCHEMA, TABLE_NAME;
+*/
+
+-- ==========================================
+-- FINAL VERIFICATION QUERY
+-- ==========================================
+
+-- Run this query to verify complete setup
+SELECT 
+    'Total Tables Created' AS metric,
+    COUNT(*)::VARCHAR AS value
+FROM INFORMATION_SCHEMA.TABLES 
+WHERE TABLE_SCHEMA IN ('CORE', 'TRANSACTIONS', 'COMPLIANCE', 'ANALYTICS')
+AND TABLE_TYPE = 'BASE TABLE'
+
+UNION ALL
+
+SELECT 
+    'Total Views Created' AS metric,
+    COUNT(*)::VARCHAR AS value
+FROM INFORMATION_SCHEMA.VIEWS 
+WHERE TABLE_SCHEMA IN ('REPORTING', 'VALIDATION')
+
+UNION ALL
+
+SELECT 
+    'Total Indexes Created' AS metric,
+    COUNT(*)::VARCHAR AS value
+FROM INFORMATION_SCHEMA.TABLES 
+WHERE TABLE_SCHEMA IN ('CORE', 'TRANSACTIONS', 'COMPLIANCE')
+
+UNION ALL
+
+SELECT 
+    'Total Stored Procedures' AS metric,
+    COUNT(*)::VARCHAR AS value
+FROM INFORMATION_SCHEMA.PROCEDURES
+WHERE PROCEDURE_SCHEMA = 'CORE'
+
+/*UNION ALL
+
+SELECT 
+    'Total Tasks Created' AS metric,
+    COUNT(*)::VARCHAR AS value
+FROM INFORMATION_SCHEMA.TASKS
+WHERE TASK_SCHEMA = 'CORE'
+*/
+UNION ALL
+
+SELECT 
+    'Sample Advisors Loaded' AS metric,
+    COUNT(*)::VARCHAR AS value
+FROM CORE.ADVISOR
+
+UNION ALL
+
+SELECT 
+    'Sample Clients Loaded' AS metric,
+    COUNT(*)::VARCHAR AS value
+FROM CORE.CLIENT
+
+UNION ALL
+
+SELECT 
+    'Sample Portfolios Loaded' AS metric,
+    COUNT(*)::VARCHAR AS value
+FROM CORE.PORTFOLIO
+
+UNION ALL
+
+SELECT 
+    'Sample Securities Loaded' AS metric,
+    COUNT(*)::VARCHAR AS value
+FROM CORE.SECURITY;
+
+-- ==========================================
+-- END OF SNOWFLAKE WEALTH MANAGEMENT DDL
+-- ==========================================
+
+/*
+===========================================
+DEPLOYMENT CHECKLIST
+===========================================
+
+□ 1. Execute all CREATE statements in order
+□ 2. Verify tables created successfully
+□ 3. Verify foreign key relationships
+□ 4. Verify indexes created
+□ 5. Load sample data
+□ 6. Test all stored procedures
+□ 7. Test all views return data
+□ 8. Review validation views for data quality
+□ 9. Configure and enable tasks
+□ 10. Set up role-based access control
+□ 11. Test user access with different roles
+□ 12. Set up monitoring and alerts
+□ 13. Document any customizations
+□ 14. Schedule regular backups
+□ 15. Plan for performance tuning
+
+===========================================
+MAINTENANCE SCHEDULE
+===========================================
+
+DAILY:
+- Automated portfolio value updates (6 PM EST)
+- Automated PnL calculations (6:30 PM EST)
+- Data quality validation (6 AM EST)
+- Review validation dashboard
+
+WEEKLY:
+- Review performance metrics
+- Check for rebalancing needs
+- Monitor compliance dashboard
+- Review task execution history
+
+MONTHLY:
+- Generate billing (1st of month, 9 AM EST)
+- Refresh materialized views
+- Review data quality trends
+- Optimize query performance
+- Archive old transaction data
+
+QUARTERLY:
+- Full data quality audit
+- Review and update validation rules
+- Performance tuning review
+- Security access review
+- Disaster recovery test
+
+ANNUALLY:
+- Complete database audit
+- Review and update constraints
+- Capacity planning
+- Schema evolution planning
+- Compliance documentation update
+
+===========================================
+SUPPORT CONTACTS
+===========================================
+
+Database Administrator: DBA Team
+Data Quality Issues: Data Governance Team
+Business Logic Questions: Business Analysts
+Security/Access: Security Team
+Performance Issues: Platform Engineering
+
+===========================================
+VERSION HISTORY
+===========================================
+
+Version 1.0 - Initial Release
+- Complete schema implementation
+- All core tables and relationships
+- Validation framework
+- Basic reporting views
+- Sample data
+
+Version 1.1 - Planned Enhancements
+- Advanced analytics views
+- Machine learning integration
+- Real-time dashboards
+- Enhanced security features
+- API integration layer
+
+===========================================
+*/

@@ -1,0 +1,134 @@
+A good banking data warehouse naming convention combines generic DW best practices (clear, consistent, layer-aware) with domain-specific prefixes and subject areas (customer, accounts, loans, cards, risk, regulatory, etc.). Below is a sample scheme you can adapt, with concrete examples.[1][2]
+
+## Core principles
+
+- Use lowercase, underscores, no spaces or special characters; avoid reserved words.[3][1]
+- Prefer clear business terms over cryptic abbreviations; where abbreviations are needed, maintain a shared glossary (e.g., `acct`, `txn`, `kpi`).[4][5]
+- Use prefixes (or suffixes) to signal both layer and object type (staging, core DW, marts, dim/fact/vw).[2][1]
+
+## Layers and schemas
+
+Typical schemas for a banking DWH (could be separate DBs or schemas in Snowflake/Redshift/BigQuery):
+
+- `src_*` – raw landing from source systems (core banking, cards, CRM).  
+- `stg_*` – staged, minimally cleaned data.  
+- `dw_core` – conformed, integrated warehouse (dimensions and facts).  
+- `dm_*` – data marts (retail, corporate, risk, finance, regulatory).  
+
+Example schemas:
+- `src_corebank`, `src_crm`, `src_cards`  
+- `stg_corebank`, `stg_crm`  
+- `dw_core`  
+- `dm_retail`, `dm_corporate`, `dm_risk`, `dm_finance`, `dm_regulatory`[2]
+
+## Table naming pattern
+
+Use a consistent pattern like:
+
+- Staging: `stg_<source>_<entity>`  
+  - `stg_corebank_customer`  
+  - `stg_corebank_account`  
+  - `stg_cards_auth_txn`  
+
+- Core dimensions: `dim_<subject_area>_<entity>`  
+  - `dim_cust_customer` (customer master)  
+  - `dim_acct_account` (account master)  
+  - `dim_prod_loan_product`  
+  - `dim_org_branch`  
+  - `dim_gl_gl_account`  
+
+- Core facts: `fct_<subject_area>_<grain>` (grain always explicit).[5]
+  - `fct_acct_daily_balance`  
+  - `fct_txn_posted_transaction`  
+  - `fct_loan_scheduled_cashflow`  
+  - `fct_card_authorization`  
+  - `fct_risk_exposure_daily`  
+
+- Data marts: prefix by mart then dim/fact:  
+  - `dm_retail.dim_retail_customer`  
+  - `dm_retail.fct_retail_txn_daily`  
+  - `dm_risk.fct_rwa_regulatory`  
+  - `dm_finance.fct_pl_actual`  
+
+## Column naming pattern
+
+Best practice is to standardize common attributes across domains. For example:[3][2]
+
+- Surrogate keys: `<entity>_sk`  
+  - `customer_sk`, `account_sk`, `branch_sk`  
+
+- Natural/business keys: `<entity>_bk` or explicit term:  
+  - `customer_bk` (e.g., CIF), `account_bk` (core banking account number), `card_number`, `loan_contract_number`  
+
+- Descriptions and codes:  
+  - `<entity>_name`, `<entity>_desc`, `<entity>_cd`  
+  - `branch_cd`, `branch_name`, `product_cd`, `product_name`  
+
+- Standard date/time columns with clear role:  
+  - `txn_date`, `posting_date`, `value_date`  
+  - `effective_from_dttm`, `effective_to_dttm` (SCD2)  
+  - `created_dttm`, `updated_dttm`, `etl_batch_id`  
+
+- Measures numeric:  
+  - `principal_amt`, `interest_amt`, `fee_amt`, `balance_amt`, `limit_amt`, `rwa_amt`, `ecl_amt`  
+
+## Banking subject areas (examples)
+
+Use a controlled vocabulary for subject areas to keep names short and consistent.[4][5]
+
+- Customer & party: `cust`, `pty`  
+  - `dim_cust_customer`, `dim_pty_counterparty`  
+- Accounts & products: `acct`, `prod`, `loan`, `dep`  
+  - `dim_acct_account`, `dim_loan_loan_contract`, `dim_prod_deposit_product`  
+- Channels & org: `chnl`, `org`, `branch`, `atm`  
+  - `dim_chnl_channel`, `dim_org_branch`, `dim_org_cost_center`  
+- Transactions: `txn`, `pay`, `card`, `cash`, `trade`  
+  - `fct_txn_posted_transaction`, `fct_pay_outbound_payment`, `fct_card_pos_txn`  
+- Risk & regulatory: `risk`, `reg`, `rwa`, `liq`, `npa`  
+  - `fct_risk_exposure_daily`, `fct_reg_rwa_b3_std`, `fct_reg_lcr_daily`, `fct_risk_npa_status`[6][7]
+
+## Sample star schemas (banking)
+
+### Retail deposits
+
+- `dim_cust_customer`  
+  - `customer_sk`, `customer_bk`, `customer_name`, `segment_cd`, `kyc_flag`, `country_cd`  
+
+- `dim_acct_account`  
+  - `account_sk`, `account_bk`, `product_sk`, `branch_sk`, `opened_date`, `closed_date`, `account_status_cd`  
+
+- `dim_prod_deposit_product`  
+  - `product_sk`, `product_cd`, `product_name`, `product_type_cd`  
+
+- `dim_org_branch`  
+  - `branch_sk`, `branch_cd`, `branch_name`, `region_cd`  
+
+- `fct_acct_daily_balance`  
+  - `account_sk`, `calendar_date`, `balance_amt`, `accrued_interest_amt`  
+
+### Basel / regulatory
+
+- `dim_reg_reporting_entity`  
+- `dim_risk_exposure_class`  
+- `fct_reg_rwa_b3_std` (Basel III RWA by exposure class, entity, date)  
+- `fct_reg_lcr_daily`  
+
+These align with common financial regulation models and Basel-related data structures without copying vendor IP.[7][6]
+
+## Governance best practices
+
+- Document the convention, examples, and abbreviation glossary in Confluence or similar and enforce in code review and DBT/DDL generators.[1][5][3]
+- Apply consistently across tools (Snowflake, Power BI datasets, semantic models) so that table and field names are recognizable end-to-end.[2]
+
+If you share your layers (e.g., Data Vault vs Kimball star) and primary platforms (Snowflake vs on-prem), a tailored convention for your bank’s stack can be drafted.
+
+[1](https://www.sapbwconsulting.com/blog/data-warehouse-naming-conventions-best-practices-for-sap)
+[2](https://blog.panoply.io/data-warehouse-naming-conventions)
+[3](https://recordlinker.com/data-warehouse-standards/)
+[4](https://www.linkedin.com/pulse/data-warehouse-naming-convention-kirill-andriychuk)
+[5](https://www.scalefree.com/blog/data-warehouse/naming-conventions/)
+[6](https://docs.oracle.com/cd/E92917_01/PDF/common/OFSAA_Data%20Model%20Naming%20Standards_Guide.pdf)
+[7](https://finregont.com/financial-regulation-data-model/)
+[8](https://www.linkedin.com/advice/0/how-can-you-name-your-fact-dimension-tables-effectively-lb0oc)
+[9](https://corporatefinanceinstitute.com/resources/financial-modeling/financial-analysis-naming-conventions-best-practices/)
+[10](https://stackoverflow.com/questions/1716220/star-schema-naming-conventions)

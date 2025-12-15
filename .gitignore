@@ -1,0 +1,30 @@
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Generated SQL files
+*_DDL.sql
+*_DML.sql
+
+# OS
+.DS_Store
+Thumbs.db
+
